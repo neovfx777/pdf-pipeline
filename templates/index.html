@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF Pipeline</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e8eaf0;min-height:100vh;display:flex;flex-direction:column}
+header{background:#1e40af;padding:14px 24px;display:flex;align-items:center;gap:12px}
+header h1{font-size:17px;font-weight:700;color:#fff}
+header span{font-size:11px;color:#93c5fd;background:#1a3590;padding:3px 10px;border-radius:20px}
+.main{display:flex;flex:1;overflow:hidden;height:calc(100vh - 48px)}
+
+/* LEFT */
+.left{width:320px;min-width:280px;background:#13151f;border-right:1px solid #1e2235;display:flex;flex-direction:column;overflow:hidden}
+.panel-title{padding:11px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#404870;border-bottom:1px solid #1a1d2e}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid #1a1d2e}
+.tab{flex:1;padding:9px;font-size:12px;cursor:pointer;text-align:center;color:#4a5080;border-bottom:2px solid transparent;transition:.15s}
+.tab.active{color:#3b82f6;border-bottom-color:#3b82f6;background:#0f1320}
+
+/* Upload zone */
+.upload-zone{margin:14px;border:2px dashed #252840;border-radius:9px;padding:22px 14px;text-align:center;cursor:pointer;transition:.2s}
+.upload-zone:hover,.upload-zone.drag{border-color:#3b82f6;background:#141a30}
+.upload-zone svg{width:30px;height:30px;color:#3b82f6;margin-bottom:8px}
+.upload-zone p{font-size:12px;color:#707898;line-height:1.6}
+#fileInput{display:none}
+
+/* Paste zone */
+.paste-zone{margin:14px;display:none;flex-direction:column;gap:8px}
+.paste-zone textarea{width:100%;height:160px;background:#1a1d2e;border:1px solid #252840;color:#e8eaf0;border-radius:8px;padding:10px;font-size:12px;resize:vertical;font-family:inherit}
+.paste-zone textarea:focus{outline:none;border-color:#3b82f6}
+
+.file-badge{margin:0 14px 8px;background:#141a30;border:1px solid #252840;border-radius:7px;padding:8px 12px;font-size:11px;color:#93c5fd;display:none;align-items:center;gap:8px}
+
+.btn{padding:9px 14px;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;transition:.2s}
+.btn-primary{background:#1e40af;color:#fff;width:calc(100% - 28px);margin:0 14px 8px;display:block}
+.btn-primary:hover:not(:disabled){background:#2563eb}
+.btn-primary:disabled{background:#1a2040;color:#404870;cursor:not-allowed}
+.btn-sm{background:#1a2040;color:#93c5fd;border:1px solid #2a3060;font-size:11px;padding:5px 10px}
+.btn-sm:hover{background:#1e2a50}
+
+.model-row{margin:0 14px 10px;display:flex;align-items:center;gap:8px}
+.model-row label{font-size:11px;color:#404870;white-space:nowrap}
+.model-row select{flex:1;background:#1a1d2e;border:1px solid #252840;color:#c0c4d8;font-size:11px;padding:5px 7px;border-radius:6px}
+
+.status{margin:0 14px 8px;padding:9px 11px;border-radius:7px;font-size:12px;display:none}
+.status.info{background:#141a30;color:#93c5fd;border:1px solid #252840}
+.status.error{background:#2d1a1a;color:#f87171;border:1px solid #5c2020}
+.status.ok{background:#0f2a1a;color:#4ade80;border:1px solid #1a4a2a}
+
+.page-list{flex:1;overflow-y:auto;padding:4px 0}
+.page-item{padding:9px 16px;cursor:pointer;border-left:3px solid transparent;transition:.15s;font-size:12px}
+.page-item:hover{background:#1a1d2e;border-left-color:#3b82f6}
+.page-item.active{background:#141a30;border-left-color:#1e40af}
+.page-item .pi-meta{display:flex;justify-content:space-between;margin-bottom:2px}
+.page-item .pi-num{font-size:10px;color:#404870}
+.page-item .pi-side{font-size:9px;color:#3b82f6}
+.page-item .pi-title{color:#c0c4d8;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* RIGHT */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* Language bar */
+.lang-bar{background:#0d1020;border-bottom:1px solid #1e2235;padding:8px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lang-bar label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#404870;white-space:nowrap}
+.lang-bar select{background:#1a1d2e;border:1px solid #2a3060;color:#c0c4d8;font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;min-width:160px}
+.lang-bar select:focus{outline:none;border-color:#3b82f6}
+.detected-badge{display:none;align-items:center;gap:6px;background:#141a30;border:1px solid #252840;border-radius:20px;padding:3px 10px;font-size:11px;color:#93c5fd}
+.detected-badge .flag{font-size:13px}
+.detected-badge .det-label{color:#404870;margin-right:2px}
+
+/* View tabs */
+.view-tabs{display:flex;background:#0a0c14;border-bottom:1px solid #1e2235}
+.view-tab{padding:10px 20px;font-size:12px;cursor:pointer;color:#404870;border-bottom:2px solid transparent;transition:.15s}
+.view-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
+
+.preview-area{flex:1;overflow:hidden;background:#0a0c14;position:relative;display:flex;align-items:center;justify-content:center}
+.preview-area iframe{width:100%;height:100%;border:none;display:none}
+.placeholder{text-align:center;color:#2a3060}
+.placeholder svg{width:56px;height:56px;margin-bottom:14px;opacity:.35}
+.placeholder p{font-size:13px;opacity:.45}
+
+/* Download bar */
+.dl-bar{background:#101820;border-top:1px solid #1a2a38;padding:10px 18px;display:none;align-items:center;gap:10px}
+.dl-bar span{font-size:12px;color:#4ade80;flex:1}
+.dl-bar a{background:#1e40af;color:#fff;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none}
+.dl-bar a:hover{background:#2563eb}
+.dl-bar a.green{background:#16a34a}
+.dl-bar a.green:hover{background:#15803d}
+
+/* Revision */
+.revision{border-top:1px solid #1e2235;background:#13151f;padding:14px 18px}
+.revision h3{font-size:10px;color:#404870;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.rev-info{font-size:11px;color:#404870;margin-bottom:7px}
+.rev-row{display:flex;gap:8px;align-items:flex-end}
+.rev-row textarea{flex:1;background:#1a1d2e;border:1px solid #252840;color:#e8eaf0;border-radius:7px;padding:9px;font-size:12px;resize:none;height:50px;font-family:inherit}
+.rev-row textarea:focus{outline:none;border-color:#3b82f6}
+.btn-rev{white-space:nowrap;background:#1e40af;color:#fff;padding:9px 16px;font-size:12px}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.sp{display:inline-block;width:12px;height:12px;border:2px solid #3a4070;border-top-color:#3b82f6;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+</style>
+</head>
+<body>
+<header>
+  <svg width="20" height="20" fill="none" stroke="#93c5fd" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+  <h1>PDF Pipeline</h1>
+  <span>Slides + Manuscript · Local AI · 15–25 Pages</span>
+</header>
+
+<div class="main">
+  <!-- LEFT -->
+  <div class="left">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('file')">📂 File</div>
+      <div class="tab" onclick="switchTab('paste')">📝 Paste Text</div>
+    </div>
+
+    <!-- File upload -->
+    <div id="fileTab">
+      <div class="upload-zone" id="dropZone" onclick="fileInput.click()">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Drop file here</strong> or click<br><span style="font-size:10px;color:#3a4060">.txt &nbsp;·&nbsp; .docx &nbsp;·&nbsp; .pdf</span></p>
+      </div>
+      <input type="file" id="fileInput" accept=".txt,.docx,.pdf">
+    </div>
+
+    <!-- Paste text -->
+    <div class="paste-zone" id="pasteTab">
+      <textarea id="pasteArea" placeholder="Paste your full text here…"></textarea>
+      <button class="btn btn-sm" onclick="submitPaste()">Use this text →</button>
+    </div>
+
+    <div class="file-badge" id="fileBadge">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <span id="fileLabel">—</span>
+    </div>
+
+    <div class="model-row">
+      <label>AI Model</label>
+      <select id="modelSelect">
+        <option value="mistral">Mistral 7B (general)</option>
+        <option value="qwen2.5-coder:7b">Qwen2.5-Coder (technical)</option>
+      </select>
+    </div>
+
+    <div class="status" id="status"></div>
+    <button class="btn btn-primary" id="genBtn" disabled onclick="generate()">⚡ Generate Slides + Manuscript</button>
+
+    <div class="panel-title">Pages</div>
+    <div class="page-list" id="pageList">
+      <div style="padding:18px 16px;font-size:12px;color:#2a3060">Upload or paste text, then generate.</div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <!-- Language bar -->
+    <div class="lang-bar">
+      <label>Output Language</label>
+      <select id="langSelect">
+        <option value="English">English</option>
+        <option value="Russian">Russian</option>
+        <option value="Uzbek">Uzbek</option>
+      </select>
+      <div class="detected-badge" id="detectedBadge">
+        <span class="det-label">Detected in file:</span>
+        <span id="detectedLang">—</span>
+      </div>
+    </div>
+
+    <div class="view-tabs">
+      <div class="view-tab active" onclick="switchView('slides')" id="tabSlides">Slides PDF</div>
+      <div class="view-tab" onclick="switchView('manuscript')" id="tabManuscript">Manuscript PDF</div>
+    </div>
+
+    <div class="preview-area" id="previewArea">
+      <div class="placeholder" id="placeholder">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <p>Your PDFs will appear here after generation</p>
+      </div>
+      <iframe id="pdfSlides"     title="Slides"></iframe>
+      <iframe id="pdfManuscript" title="Manuscript" style="display:none"></iframe>
+    </div>
+
+    <div class="dl-bar" id="dlBar">
+      <span>✓ Ready</span>
+      <a id="dlSlides" href="#">⬇ Download Slides</a>
+      <a id="dlManuscript" href="#" class="green">⬇ Download Manuscript</a>
+    </div>
+
+    <div class="revision">
+      <h3>Revise a Page</h3>
+      <div class="rev-info" id="revInfo">Click a page in the list, then type instructions.</div>
+      <div class="rev-row">
+        <textarea id="revText" placeholder="e.g. Simplify the content, add Einstein's equation, change subtitle to…"></textarea>
+        <button class="btn btn-rev" onclick="revise()">Revise</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let sid=null, selPage=null, pages=[], activeView='slides';
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['file','paste'][i]===t));
+  document.getElementById('fileTab').style.display  = t==='file'  ? 'block'  : 'none';
+  document.getElementById('pasteTab').style.display = t==='paste' ? 'flex'   : 'none';
+}
+function switchView(v){
+  activeView=v;
+  document.getElementById('tabSlides').classList.toggle('active',v==='slides');
+  document.getElementById('tabManuscript').classList.toggle('active',v==='manuscript');
+  document.getElementById('pdfSlides').style.display     = v==='slides'     ? 'block':'none';
+  document.getElementById('pdfManuscript').style.display = v==='manuscript' ? 'block':'none';
+}
+
+// ── File upload ───────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag')});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0])});
+
+async function handleFile(file){
+  showStatus('info','<span class="sp"></span>Uploading…');
+  const fd=new FormData(); fd.append('file',file);
+  const res=await fetch('/upload',{method:'POST',body:fd});
+  const d=await res.json();
+  if(d.error){showStatus('error',d.error);return;}
+  setSession(d.session_id, d.filename, d.chars, d.est_pages, d.detected_lang);
+}
+
+async function submitPaste(){
+  const text=document.getElementById('pasteArea').value.trim();
+  if(!text){showStatus('error','No text entered');return;}
+  showStatus('info','<span class="sp"></span>Loading text…');
+  const res=await fetch('/text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  const d=await res.json();
+  if(d.error){showStatus('error',d.error);return;}
+  setSession(d.session_id,'pasted text',d.chars,d.est_pages,d.detected_lang);
+}
+
+function setSession(id,filename,chars,estPages,detectedLang){
+  sid=id;
+  document.getElementById('fileBadge').style.display='flex';
+  document.getElementById('fileLabel').textContent=filename;
+  document.getElementById('genBtn').disabled=false;
+  document.getElementById('genBtn').textContent=`⚡ Generate (~${estPages} pages)`;
+  showStatus('ok',`✓ Ready — ${chars.toLocaleString()} chars · est. ${estPages} pages`);
+  if(detectedLang){
+    const badge=document.getElementById('detectedBadge');
+    document.getElementById('detectedLang').textContent=detectedLang.name;
+    badge.style.display='flex';
+    // auto-select detected language only if it's one of the supported options
+    const sel=document.getElementById('langSelect');
+    const supported=['English','Russian','Uzbek'];
+    if(supported.includes(detectedLang.name)){
+      for(let i=0;i<sel.options.length;i++){
+        if(sel.options[i].value===detectedLang.name){sel.selectedIndex=i;break;}
+      }
+    }
+  }
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+async function generate(){
+  if(!sid)return;
+  const model=document.getElementById('modelSelect').value;
+  const language=document.getElementById('langSelect').value;
+  document.getElementById('genBtn').disabled=true;
+  showStatus('info',`<span class="sp"></span>AI is writing slides + manuscript in ${language}… this may take 2–4 min`);
+  const res=await fetch('/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,model,language})});
+  const d=await res.json();
+  if(d.error){showStatus('error',d.error);document.getElementById('genBtn').disabled=false;return;}
+  showStatus('ok',`✓ "${d.title}" — ${d.pages} pages`);
+  document.getElementById('genBtn').disabled=false;
+  await loadPages();
+  showPDFs();
+}
+
+async function loadPages(){
+  const res=await fetch(`/session/${sid}`);
+  const d=await res.json();
+  pages=d.pages||[];
+  renderPages();
+}
+
+function getSide(n){const i=n-1;if(i<4)return'right';if(i<8)return'left';if(i<12)return'right';return'left';}
+
+function renderPages(){
+  const list=document.getElementById('pageList');
+  list.innerHTML='';
+  pages.forEach(p=>{
+    const side=getSide(p.page_num);
+    const div=document.createElement('div');
+    div.className='page-item'+(selPage===p.page_num?' active':'');
+    div.innerHTML=`<div class="pi-meta"><span class="pi-num">Page ${p.page_num}</span><span class="pi-side">${side==='right'?'▶ right':'◀ left'}</span></div><div class="pi-title">${p.subtitle||'—'}</div>`;
+    div.onclick=()=>selectPage(p.page_num);
+    list.appendChild(div);
+  });
+}
+
+function selectPage(n){
+  selPage=n;
+  renderPages();
+  const p=pages.find(x=>x.page_num===n);
+  if(p) document.getElementById('revInfo').textContent=`Page ${n}: "${p.subtitle}"`;
+  const frame = activeView==='slides' ? document.getElementById('pdfSlides') : document.getElementById('pdfManuscript');
+  if(frame.src){ const base=frame.src.split('#')[0]; frame.src=base+`#page=${n}`; }
+}
+
+function showPDFs(){
+  const t=Date.now();
+  document.getElementById('pdfSlides').src=`/preview/presentation/${sid}?t=${t}`;
+  document.getElementById('pdfManuscript').src=`/preview/manuscript/${sid}?t=${t}`;
+  document.getElementById('pdfSlides').style.display='block';
+  document.getElementById('placeholder').style.display='none';
+  document.getElementById('dlBar').style.display='flex';
+  document.getElementById('dlSlides').href=`/download/presentation/${sid}`;
+  document.getElementById('dlManuscript').href=`/download/manuscript/${sid}`;
+  switchView('slides');
+}
+
+// ── Revise ────────────────────────────────────────────────────────────────────
+async function revise(){
+  if(!sid||!selPage){showStatus('error','Select a page first');return;}
+  const instr=document.getElementById('revText').value.trim();
+  if(!instr){showStatus('error','Enter revision instructions');return;}
+  const model=document.getElementById('modelSelect').value;
+  const language=document.getElementById('langSelect').value;
+  const btn=document.querySelector('.btn-rev');
+  btn.disabled=true; btn.textContent='…';
+  showStatus('info',`<span class="sp"></span>Revising page ${selPage}…`);
+  const res=await fetch('/revise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,page_num:selPage,instruction:instr,model,language})});
+  const d=await res.json();
+  if(d.error){showStatus('error',d.error);btn.disabled=false;btn.textContent='Revise';return;}
+  showStatus('ok',`✓ Page ${selPage} revised`);
+  document.getElementById('revText').value='';
+  await loadPages();
+  showPDFs();
+  btn.disabled=false; btn.textContent='Revise';
+}
+
+function showStatus(type,msg){
+  const s=document.getElementById('status');
+  s.className=`status ${type}`; s.style.display='block'; s.innerHTML=msg;
+}
+</script>
+</body>
+</html>
